@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+
+# 虚拟环境
+venv/
+.venv/
+env/
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# 构建和分发
+build/
+dist/
+*.egg-info/
+
+# 测试和覆盖率报告
+.pytest_cache/
+.coverage
+
+# 日志
+*.log
+
+# 操作系统生成的文件
+.DS_Store
+Thumbs.db
+
+# 项目特定文件
+config.yaml

@@ -1,0 +1,18 @@
+Source: git-wise
+Section: devel
+Priority: optional
+Maintainer: Your Name <your.email@example.com>
+Build-Depends: debhelper-compat (= 13), dh-python, python3-all, python3-setuptools
+Standards-Version: 4.5.1
+Homepage: https://github.com/yourusername/git-wise
+#Vcs-Browser: https://salsa.debian.org/debian/git-wise
+#Vcs-Git: https://salsa.debian.org/debian/git-wise.git
+Rules-Requires-Root: no
+
+Package: python3-git-wise
+Architecture: all
+Depends: ${python3:Depends}, ${misc:Depends}
+Description: 智能的 Git 提交消息生成工具
+ Git-Wise 是一个基于 Python 的工具,可以自动生成
+ 有意义的 Git 提交消息。它使用先进的自然语言处理
+ 技术来分析代码变更,并生成简洁而信息丰富的提交消息。
