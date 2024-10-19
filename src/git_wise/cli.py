@@ -206,9 +206,15 @@ def display_commit_message(message, commit_num=None):
         border_style="blue"
     ))
     
+    # 创建一个可以直接复制粘贴的版本
+    escaped_message = message.replace('"', '\\"').replace('$', '\\$')
+    copyable_command = f'git commit -m "{escaped_message}"'
+    
     console.print("\n[blue]You can commit using:[/blue]")
-    console.print(f"git commit -m \"{message}\"")
-    print()
+    console.print(f"[green]{copyable_command}[/green]")
+    
+    console.print("\n[yellow]Copy the above command to commit, or use this for manual editing:[/yellow]")
+    console.print(f"git commit -m \"{message.split()[0]}...\"")
 
 @cli.command()
 def doctor():
