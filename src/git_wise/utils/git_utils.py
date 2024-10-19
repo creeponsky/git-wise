@@ -3,11 +3,11 @@ from git import Repo, InvalidGitRepositoryError
 from git.repo import Repo as GitRepo
 import git
 from github import Github
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Union
 import requests
 from urllib.parse import urlparse
 import time
-
+import traceback
 def get_repo(path = os.getcwd()) -> GitRepo:
     try:
         return Repo(path, search_parent_directories=True)
@@ -56,73 +56,292 @@ def get_file_diff(file_path: str, repo: GitRepo=get_repo()) -> str:
         print(f"Warning: Failed to get diff for {file_path}")
         return ""
 
-def get_all_staged_diffs(repo: GitRepo=get_repo()) -> Dict[str, Dict[str, str]]:
+import os
+from typing import Dict, Set, Optional
+from git import Repo, GitCommandError, InvalidGitRepositoryError
+from git.repo import Repo as GitRepo
+from pathlib import Path
+from rich.console import Console
+
+console = Console()
+
+def get_repo(path=os.getcwd()) -> GitRepo:
+    try:
+        return Repo(path, search_parent_directories=True)
+    except InvalidGitRepositoryError:
+        raise InvalidGitRepositoryError(f"Not a git repository: {path}")
+
+def get_all_staged_diffs(repo: GitRepo = get_repo(), for_prompt: bool = True) -> Dict[str, Union[Dict, List[str]]]:
+    """
+    Get all staged differences in the repository with two output modes.
+    
+    Args:
+        repo: Git repository object
+        for_prompt: If True, use concise AI prompting format; if False, use detailed user format
+    
+    Returns:
+        Dictionary with file changes information, format varies by mode:
+        
+        AI mode format (concise):
+        {
+            "file_path": {
+                "type": "new|modified|deleted|renamed",
+                "changes": "only_changed_portions",
+                "size": file_size_in_bytes,  # Only for new files
+                "truncated": boolean  # True if content was truncated
+            }
+        }
+        
+        User mode format (detailed):
+        {
+            "file_path": {
+                "type": "new|modified|deleted|renamed",
+                "content": "full_content_or_diff",
+                "old_path": "original_path_if_renamed",
+                "error": "error_message_if_any"
+            }
+        }
+    """
+
     diffs = {}
+    staged_files = set()
+    
     try:
-        staged_files = repo.index.diff("HEAD")
-    except git.exc.GitCommandError:
-        # Handle case for initial commit when HEAD doesn't exist
-        staged_files = repo.index.diff(None)
-
-    for item in staged_files:
+        # Handle detached HEAD state
         try:
-            if item.change_type == 'A':  # New file
-                try:
-                    content = repo.git.show(f':0:{item.b_path}')
-                except git.exc.GitCommandError:
-                    content = "Unable to retrieve file content"
-                diffs[item.b_path] = {
-                    'type': 'new',
-                    'content': content
-                }
-            elif item.change_type == 'D':  # Deleted file
-                diffs[item.a_path] = {
-                    'type': 'deleted',
-                    'content': ''
-                }
-            elif item.change_type == 'M':  # Modified file
-                try:
-                    content = repo.git.diff('HEAD', '--', item.b_path)
-                except git.exc.GitCommandError:
-                    content = "Unable to retrieve file diff"
-                diffs[item.b_path] = {
-                    'type': 'modified',
-                    'content': content
-                }
-            elif item.change_type == 'R':  # Renamed file
-                try:
-                    content = repo.git.diff('HEAD', '--', item.b_path)
-                except git.exc.GitCommandError:
-                    content = "Unable to retrieve file diff"
-                diffs[item.b_path] = {
-                    'type': 'renamed',
-                    'old_path': item.a_path,
-                    'content': content
-                }
-        except Exception as e:
-            print(f"Warning: Error processing file {item.a_path or item.b_path}: {str(e)}")
+            current_commit = repo.head.commit
+        except TypeError:
+            current_commit = None
 
-    # Handle untracked new files
-    try:
-        untracked = repo.untracked_files
-        for file in untracked:
-            if file in repo.index.entries:
-                file_path = os.path.join(repo.working_tree_dir, file)
-                try:
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        content = f.read()
-                except UnicodeDecodeError:
-                    content = "Binary file"
-                except Exception as e:
-                    content = f"Unable to read file content: {str(e)}"
-                diffs[file] = {
-                    'type': 'new',
-                    'content': content
+        # Get staged changes
+        if current_commit:
+            staged = repo.index.diff(current_commit)
+        else:
+            staged = repo.index.diff(None)
+        staged_files.update([(item.a_path, item.b_path) for item in staged])
+
+        # Handle new files
+        staged_new = set(repo.index.entries.keys()) - set(item.a_path for item in staged)
+        staged_files.update([(None, path) for path in staged_new])
+
+        # Process each file
+        for a_path, b_path in staged_files:
+            current_path = b_path or a_path
+            if current_path is None:
+                # Log the occurrence of a None path for debugging
+                print(f"Warning: Encountered None path. a_path: {a_path}, b_path: {b_path}")
+                continue
+
+            try:
+                status = get_file_status(repo, a_path, b_path)
+                if status is None:
+                    # Log unexpected status for debugging
+                    print(f"Warning: Unexpected file status for {current_path}. a_path: {a_path}, b_path: {b_path}")
+                    continue
+
+                if status not in ["new", "modified", "deleted", "renamed"]:
+                    # Handle unexpected status
+                    print(f"Warning: Unhandled file status '{status}' for {current_path}")
+                    status = "unknown"
+
+                if for_prompt:
+                    file_info = process_file_ai_mode(repo, current_path, status, a_path)
+                else:
+                    file_info = process_file_user_mode(repo, current_path, status, a_path)
+
+                diffs[current_path] = file_info
+
+            except Exception as e:
+                error_info = {
+                    "type": "error",
+                    "error": str(e)
                 }
+                if for_prompt:
+                    error_info["changes"] = ""
+                else:
+                    error_info["content"] = ""
+                diffs[current_path] = error_info
+                if not for_prompt:
+                    console.print(f"[yellow]Warning: Error processing {current_path}: {str(e)}[/yellow]")
+
     except Exception as e:
-        print(f"Warning: Error processing untracked files: {str(e)}")
+        if not for_prompt:
+            console.print(f"[red]Error accessing repository: {str(e)}[/red]")
+        return {}
 
     return diffs
+
+def process_file_ai_mode(repo: GitRepo, current_path: str, status: str, a_path: Optional[str]) -> List[str]:
+    MAX_CONTENT_SIZE = 50000  # 50KB limit for AI processing
+
+    file_info = {
+        "type": status,
+        "content": ""
+    }
+
+    try:
+        if status == "new":
+            content = get_new_file_content(repo, current_path)
+            size = len(content.encode('utf-8'))
+            if size <= MAX_CONTENT_SIZE:
+                file_info["content"] = content
+            else:
+                file_info["content"] = f"[Large new file: {size/1024:.1f}KB]"
+        
+        elif status == "modified":
+            diff = get_modified_file_diff(repo, current_path)
+            file_info["content"] = extract_diff_hunks(diff)
+        
+        elif status == "renamed":
+            file_info["old_path"] = a_path
+            file_info["content"] = extract_diff_hunks(get_modified_file_diff(repo, current_path))
+        
+        elif status == "deleted":
+            file_info["content"] = "[File deleted]"
+
+    except Exception as e:
+        file_info["content"] = f"[Error: {str(e)}]"
+
+    return [current_path, file_info["type"], file_info["content"]]
+
+def process_file_user_mode(repo: GitRepo, current_path: str, status: str, a_path: Optional[str]) -> Dict:
+    """Process file changes in user mode (detailed output)"""
+    file_info = {
+        "type": status,
+        "content": "",
+        "error": None
+    }
+
+    if status == "new":
+        file_info["content"] = get_new_file_content(repo, current_path)
+    elif status == "modified":
+        file_info["content"] = get_modified_file_diff(repo, current_path)
+    elif status == "deleted":
+        file_info["content"] = get_deleted_file_content(repo, current_path)
+    elif status == "renamed":
+        file_info.update({
+            "old_path": a_path,
+            "content": get_modified_file_diff(repo, current_path)
+        })
+
+    return file_info
+
+def extract_diff_hunks(diff_content: str) -> str:
+    """Extract only the changed hunks from a diff output"""
+    lines = diff_content.split('\n')
+    hunks = []
+    current_hunk = []
+    
+    for line in lines:
+        if line.startswith('@@'):
+            if current_hunk:
+                hunks.append('\n'.join(current_hunk))
+                current_hunk = []
+        if line.startswith(('@@', '+', '-')) and not line.startswith('+++') and not line.startswith('---'):
+            current_hunk.append(line)
+    
+    if current_hunk:
+        hunks.append('\n'.join(current_hunk))
+    
+    return '\n'.join(hunks)
+
+def get_file_status(repo: GitRepo, a_path: Optional[str], b_path: Optional[str]) -> Optional[str]:
+    """Determine the status of a file in the repository."""
+    try:
+        if a_path is None and b_path:
+            return "new"
+        elif a_path and b_path is None:
+            return "deleted"
+        elif a_path and b_path and a_path != b_path:
+            return "renamed"
+        elif a_path and b_path and a_path == b_path:
+            return "modified"
+        return None
+    except Exception:
+        return None
+
+def get_new_file_content(repo: GitRepo, file_path: str) -> str:
+    """Get content of a new file."""
+    try:
+        return repo.git.show(f':0:{file_path}')
+    except GitCommandError:
+        try:
+            if isinstance(repo.working_dir, tuple):
+                # If repo.working_dir is unexpectedly a 6tuple, use the first element
+                working_dir = repo.working_dir[0] if repo.working_dir else ''
+            else:
+                working_dir = repo.working_dir
+
+            full_path = os.path.join(working_dir, file_path)
+            with open(full_path, 'r', encoding='utf-8') as f:
+                return f.read()
+        except UnicodeDecodeError:
+            return "[Binary file]"
+        except TypeError as e:
+            return f"[Unable to read file content: {str(e)}]"
+        except Exception as e:
+            return f"[Unable to read file content: {str(e)}]"
+
+def get_modified_file_diff(repo: GitRepo, file_path: str) -> str:
+    """Get diff of a modified file."""
+    try:
+        return repo.git.diff('--cached', '--', file_path)
+    except GitCommandError as e:
+        return f"[Unable to get diff: {str(e)}]"
+
+def get_deleted_file_content(repo: GitRepo, file_path: str) -> str:
+    """Get content of a deleted file."""
+    try:
+        return repo.git.show(f'HEAD:{file_path}')
+    except GitCommandError:
+        return "[Content not available]"
+    
+def print_staged_changes(diffs: Dict[str, Union[Dict, List[str]]]) -> None:
+    """Pretty print staged changes."""
+    if not diffs:
+        console.print("[yellow]No staged changes found.[/yellow]")
+        return
+
+    console.print("\n[bold blue]Staged Changes:[/bold blue]")
+    for file_path, info in diffs.items():
+        
+        type_colors = {
+            "new": "green",
+            "modified": "yellow",
+            "deleted": "red",
+            "renamed": "blue",
+            "error": "red"
+        }
+        if isinstance(info, list):
+            color = type_colors.get(info[1], "white")
+            
+            console.print(f"\n[{color}]File: {file_path}[/{color}]")
+            console.print(f"Type: {info[1]}")
+            
+            if info[1] == "renamed":
+                console.print(f"Old path: {info[2]}")
+            
+            if info[1] == "error":
+                console.print(f"[red]Error: {info[2]}[/red]")
+            elif info[1] == "new":
+                preview = info[2][:500] + ("..." if len(info[2]) > 500 else "")
+                console.print("Content preview:")
+                console.print(preview)
+        else:
+            color = type_colors.get(info["type"], "white")
+        
+            console.print(f"\n[{color}]File: {file_path}[/{color}]")
+            console.print(f"Type: {info['type']}")
+            
+            if info["type"] == "renamed":
+                console.print(f"Old path: {info.get('old_path', 'unknown')}")
+            
+            if info.get("error"):
+                console.print(f"[red]Error: {info['error']}[/red]")
+            elif content := info.get("content"):
+                preview = content[:500] + ("..." if len(content) > 500 else "")
+                console.print("Content preview:")
+                console.print(preview)
 
 def get_current_repo_info(repo_path='.') -> Optional[Dict]:
     try:
@@ -278,21 +497,24 @@ def get_github_info(remote_url: str) -> Optional[Dict]:
 #         'recent_commits': recent_commits,
 #         'open_issues': open_issues
 #     }
-print(get_all_staged_diffs())
+# print(get_all_staged_diffs())
 
 # Test function
+
 def test_get_all_staged_diffs():
+    """Test function for staged diffs."""
     try:
-        result = get_all_staged_diffs()
-        print("Staged file differences:")
-        for file, diff in result.items():
-            print(f"File: {file}")
-            print(f"Type: {diff['type']}")
-            print(f"Content: {diff['content'][:100]}...")  # Print only the first 100 characters
-            print("---")
+        diffs = get_all_staged_diffs()
+        # print_staged_changes(diffs)
+        
+        # diffs_for_user = get_all_staged_diffs(for_prompt=False)
+        # print_staged_changes(diffs_for_user)
+    except InvalidGitRepositoryError as e:
+        console.print(f"[red]Error: {str(e)}[/red]")
     except Exception as e:
-        print(f"Error getting staged file differences: {str(e)}")
-        print("If this error persists, please report it to the developer at https://github.com/varhuman/git-wise/issues")
+        console.print(f"[red]Unexpected error: {str(e)}[/red]")
+        console.print(f"traceback: {traceback.format_exc()}")
+        console.print("[yellow]If this error persists, please report it at https://github.com/varhuman/git-wise/issues[/yellow]")
 
 # Run test
-test_get_all_staged_diffs()
+# test_get_all_staged_diffs()

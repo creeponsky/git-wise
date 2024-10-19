@@ -8,7 +8,7 @@ from git_wise.core.analyzer import analyze_changes
 from git_wise.core.generator import CommitMessageGenerator
 from git_wise.core.splitter import split_commits
 from git_wise.config import load_config, save_config, get_api_key
-from git_wise.utils.git_utils import get_all_staged_diffs, get_current_repo_info
+from git_wise.utils.git_utils import get_all_staged_diffs, get_current_repo_info, print_staged_changes
 from git_wise.core.generator import AIProvider
 import sys
 from git_wise.utils.exceptions import GitWiseError
@@ -16,7 +16,7 @@ from git.exc import InvalidGitRepositoryError
 from enum import Enum
 import os
 from pathlib import Path
-
+import traceback
 console = Console()
 VERSION = "0.1.0"
 
@@ -45,6 +45,53 @@ def cli():
     """
     pass
 
+def configure_language(current_config):
+    language_choice = questionary.select(
+        "Select your default commit message language:",
+        choices=[lang.value[0] for lang in Language],
+        default=Language.ENGLISH.value[0]
+    ).ask()
+    
+    selected_language = next(lang for lang in Language if lang.value[0] == language_choice)
+    if selected_language == Language.CUSTOM:
+        default_language = questionary.text(
+            "Enter the language code (e.g., fr, de, es) or language name:",
+            validate=lambda text: len(text) > 0
+        ).ask()
+    else:
+        default_language = selected_language.value[1]
+    
+    current_config['default_language'] = default_language
+    return current_config
+
+def configure_detail_level(current_config):
+    detail_level = questionary.select(
+        "Select the detail level for commit messages:",
+        choices=[level.value[0] for level in DetailLevel],
+        default=DetailLevel.BRIEF.value[0]
+    ).ask()
+    selected_detail = next(level for level in DetailLevel if level.value[0] == detail_level)
+    current_config['detail_level'] = selected_detail.value[1]
+    return current_config
+
+def configure_api_key(current_config):
+    api_key = input("Enter your OpenAI API key (may be used for other AI providers in the future):").strip()
+    while not api_key:
+        print("API key cannot be empty, please re-enter.")
+        api_key = input("Enter your OpenAI API key (may be used for other AI providers in the future):").strip()
+    current_config['openai_api_key'] = api_key
+    return current_config
+
+def configure_model(current_config):
+    model_choice = questionary.select(
+        "Select the default model:",
+        choices=[model.value[0] for model in Model],
+        default=Model.GPT4O_MINI.value[0]
+    ).ask()
+    selected_model = next(model for model in Model if model.value[0] == model_choice)
+    current_config['default_model'] = selected_model.value[1]
+    return current_config
+
 @cli.command()
 def init():
     """Initialize or reconfigure Git-Wise"""
@@ -60,50 +107,10 @@ def init():
             console.print("[green]Keeping existing configuration.[/green]")
             return
 
-    language_choice = questionary.select(
-        "Select your default commit message language:",
-        choices=[lang.value[0] for lang in Language],
-        default=Language.ENGLISH.value[0]
-    ).ask()
-    
-    selected_language = next(lang for lang in Language if lang.value[0] == language_choice)
-    if selected_language == Language.CUSTOM:
-        default_language = questionary.text(
-            "Enter the language code (e.g., fr, de, es) or language name:",
-            validate=lambda text: len(text) > 0
-        ).ask()
-    else:
-        default_language = selected_language.value[1]
-        
-    detail_level = questionary.select(
-        "Select the detail level for commit messages:",
-        choices=[level.value[0] for level in DetailLevel],
-        default=DetailLevel.BRIEF.value[0]
-    ).ask()
-    selected_detail = next(level for level in DetailLevel if level.value[0] == detail_level)
-
-    # api_key = questionary.text(
-    #     "Enter your OpenAI API key (may be used for other AI providers in the future):",
-    #     validate=lambda text: len(text) > 0
-    # ).ask()
-    api_key = input("Enter your OpenAI API key (may be used for other AI providers in the future):").strip()
-    while not api_key:
-        print("API key cannot be empty, please re-enter.")
-        api_key = input("Enter your OpenAI API key (may be used for other AI providers in the future):").strip()
-    
-    model_choice = questionary.select(
-        "Select the default model:",
-        choices=[model.value[0] for model in Model],
-        default=Model.GPT4O_MINI.value[0]
-    ).ask()
-    selected_model = next(model for model in Model if model.value[0] == model_choice)
-
-    config.update({
-        'default_language': default_language,
-        'openai_api_key': api_key,
-        'default_model': selected_model.value[1],
-        'detail_level': selected_detail.value[1]
-    })
+    config = configure_language(config)
+    config = configure_detail_level(config)
+    config = configure_api_key(config)
+    config = configure_model(config)
     
     save_config(config)
     
@@ -136,7 +143,7 @@ def start(language, detail, use_author_key, interactive):
                 "or use --use-author-key option."
             )
         
-        generator = CommitMessageGenerator(AIProvider.OPENAI)
+        generator = CommitMessageGenerator(AIProvider.OPENAI, model=config.get('default_model'))
         
         language = language or config.get('default_language', 'en')
         detail = detail or config.get('detail_level', 'brief')
@@ -184,6 +191,7 @@ def start(language, detail, use_author_key, interactive):
         sys.exit(1)
     except Exception as e:
         console.print(f"[bold red]An unexpected error occurred: {str(e)}[/bold red]")
+        console.print(f"traceback: {traceback.format_exc()}")
         sys.exit(1)
 
 def display_commit_message(message, commit_num=None):
@@ -245,6 +253,53 @@ def doctor():
     for check, status in checks:
         console.print(f"{check}: {status}")
 
+@cli.command()
+def show_diff():
+    """Show staged changes"""
+    try:
+        diffs_for_user = get_all_staged_diffs(for_prompt=False)
+        if not diffs_for_user:
+            console.print("[yellow]No staged changes found.[/yellow]")
+            return
+        print_staged_changes(diffs_for_user)
+        
+    except Exception as e:
+        console.print(f"[bold red]Error: {str(e).replace('[', '').replace(']', '')}[/bold red]")
+        sys.exit(1)
+        
+@cli.command()
+@click.option('--default-language', '-l', is_flag=True, help='Set default language')
+@click.option('--detail-level', '-d', is_flag=True, help='Set detail level')
+@click.option('--api-key', '-k', is_flag=True, help='Set OpenAI API key')
+@click.option('--model', '-m', is_flag=True, help='Set default model')
+def config(default_language, detail_level, api_key, model):
+    """Update specific configuration settings"""
+    config = load_config()
+    
+    if default_language:
+        config = configure_language(config)
+    
+    if detail_level:
+        config = configure_detail_level(config)
+    
+    if api_key:
+        config = configure_api_key(config)
+    
+    if model:
+        config = configure_model(config)
+    
+    if not any([default_language, detail_level, api_key, model]):
+        console.print("[yellow]No configuration changes specified. Use options to update specific settings.[/yellow]")
+        console.print("Available options:")
+        console.print("  --default-language, -l  Set default language")
+        console.print("  --detail-level, -d      Set detail level")
+        console.print("  --api-key, -k           Set OpenAI API key")
+        console.print("  --model, -m             Set default model")
+        return
+    
+    save_config(config)
+    console.print("[green]Configuration updated successfully![/green]")
+
 def print_welcome_screen():
     welcome_message = """
     [bold green]
@@ -259,9 +314,11 @@ def print_welcome_screen():
     Your intelligent Git commit message generator.
     
     [blue]Available commands:[/blue]
-    • git-wise init   - Configure Git-Wise
-    • git-wise start  - Generate commit messages
-    • git-wise doctor - Check system status
+    • git-wise init       - Configure Git-Wise
+    • git-wise start      - Generate commit messages
+    • git-wise doctor     - Check system status
+    • git-wise show-diff  - Show staged changes
+    • git-wise config     - Update specific settings
     
     Use 'git-wise --help' for more information.
     
