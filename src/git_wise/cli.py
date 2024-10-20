@@ -173,13 +173,14 @@ def start(language, detail, use_author_key, interactive):
             
             console.print("[bold]Generating commit message by AI...[/bold]")
             commit_message, token = generator.generate_commit_message(changes_str, language, detail, repo_info)
-            display_commit_message(commit_message, token)
+            display_commit_message(commit_message, token, interactive)
             
             if interactive:
                 if questionary.confirm("Do you want to use this commit message?").ask():
                     import subprocess
                     subprocess.run(['git', 'commit', '-m', commit_message])
                     console.print("[green]Commit created successfully![/green]")
+                    console.print("[bold]Tip: Now, You can push it with 'git push' 🫡[/bold]")
                 
     except GitWiseError as e:
         console.print(f"[red]Error: {str(e)}[/red]")
@@ -191,56 +192,33 @@ def start(language, detail, use_author_key, interactive):
         console.print(Text(f"An unexpected error occurred: {str(e)}", style="red", justify="left"))
         traceback.print_exc()
         sys.exit(1)
-        
-def create_commit(commit_message):
-    """Create a commit using a temporary file to preserve multi-line format"""
-    try:
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, encoding='utf-8') as temp_file:
-            temp_file.write(commit_message)
-            temp_file_path = temp_file.name
 
-        import subprocess
-        result = subprocess.run(['git', 'commit', '-F', temp_file_path], capture_output=True, text=True)
-        
-        if result.returncode == 0:
-            console.print("[green]Commit created successfully![/green]")
-        else:
-            console.print(f"[red]Failed to create commit. Error: {result.stderr}[/red]")
-    
-    finally:
-        # Clean up the temporary file
-        if 'temp_file_path' in locals():
-            os.unlink(temp_file_path)
-
-
-def display_commit_message(message: str, token: int):
+def display_commit_message(message: str, token: int, is_interactive: bool = False):
     """Display generated commit message with formatting"""
-    # 移除可能存在的 markdown 代码块标记
     message = message.strip('`').strip()
     
-    # 显示生成的消息
-    title = f"Generated Commit Message ({token} tokens, if you use gpt-4o-mini, it will cost ${token * 0.150 / 1000000} USD 😎🥹)"
+    title = f"Generated Commit Message ({token} tokens)"
+    cost = f"Cost: ${token * 0.150 / 1000000:.6f} USD 🥹 (gpt-4o-mini) (by https://openai.com/api/pricing/ date: 2024-10-20))"
+    
     console.print(Panel.fit(
         Syntax(message, "markdown", theme="monokai", word_wrap=True),
         title=title,
+        subtitle=cost,
         border_style="blue"
     ))
     
-    # 处理消息以适应命令行
     escaped_message = (
         message.replace('"', '\\"')
               .replace('$', '\\$')
-              .replace('\n', ' ')  # 将换行符转换为空格
+              .replace('\n', ' ')
               .replace("'", "\\'")
     )
     
-    # 创建可复制的命令
     copyable_command = f'git commit -m "{escaped_message}"'
     
-    # 显示可执行的命令
+    console.print("[yellow]Tip: The main cost of tokens comes from the number of changes you made. We may optimize it in the future.🙏🙏[/yellow]")
     console.print("\n[blue]Execute this command to commit:[/blue]")
     
-    # 使用 Syntax 来显示命令，这样更容易复制
     console.print(Syntax(
         copyable_command,
         "bash",
@@ -249,15 +227,14 @@ def display_commit_message(message: str, token: int):
         padding=1
     ))
     
-    # 复制到剪贴板
     try:
         pyperclip.copy(copyable_command)
         console.print("[green](Command copied to clipboard!)[/green]")
     except Exception:
         console.print("[yellow](Auto-copy not available)[/yellow]")
     
-    # 添加交互模式提示
-    console.print("\n[dim]💡 Tip: Next time use 'git-wise start -i' for interactive commit![/dim]")
+    if is_interactive:
+        console.print("\n[dim]💡 Tip: Next time use 'git-wise start -i' for interactive commit![/dim]")
 
 @cli.command()
 def doctor():
@@ -266,12 +243,10 @@ def doctor():
     
     checks = []
     
-    # Check configuration file
     try:
         config = load_config()
         checks.append(("Configuration file", "✅ Found"))
         
-        # Check necessary configuration items
         required_keys = ['default_language', 'openai_api_key', 'default_model', 'interactive']
         missing_keys = [key for key in required_keys if key not in config]
         if missing_keys:
@@ -281,14 +256,12 @@ def doctor():
     except Exception:
         checks.append(("Configuration file", "❌ Not found or invalid"))
     
-    # Check Git repository
     try:
         get_current_repo_info()
         checks.append(("Git repository", "✅ Valid"))
     except Exception:
         checks.append(("Git repository", "❌ Not found or invalid"))
     
-    # Check API key
     try:
         api_key = get_api_key(False)
         if api_key:
@@ -298,32 +271,25 @@ def doctor():
     except Exception:
         checks.append(("API key", "❌ Error checking"))
     
-    # Display check results
     for check, status in checks:
         console.print(f"{check}: {status}")
         
-# View current configuration
 @cli.command()
 def show_config():
     """Show current configuration"""
     config = load_config()
     
-    # Process and display configuration information
     display_config = {}
     for key, value in config.items():
         if key == 'openai_api_key':
-            # Only show the first 6 and last 4 characters of the API key
             display_config[key] = f"{value[:6]}...{value[-4:]}" if value else "Not set"
         elif key == 'default_language':
-            # Display the full name of the language
             language = next((lang for lang in Language if lang.value[1] == value), None)
             display_config[key] = language.value[0] if language else value
         elif key == 'detail_level':
-            # Display the description of the detail level
             detail = next((level for level in DetailLevel if level.value[1] == value), None)
             display_config[key] = detail.value[0] if detail else value
         elif key == 'default_model':
-            # Display the full name of the model
             model = next((m for m in Model if m.value[1] == value), None)
             display_config[key] = model.value[0] if model else value
         elif key == 'interactive':
