@@ -7,7 +7,7 @@ name = "git-wise"
 version = "0.1.0"
 description = "AI-powered Git commit message generator"
 readme = "README.md"
-authors = [{ name = "varhuman", email = "varhuman@gmail.com" }]
+authors = [{ name = "creeponsky", email = "creeponsky@gmail.com" }]
 license = { file = "LICENSE" }
 classifiers = [
     "License :: OSI Approved :: MIT License",

@@ -430,7 +430,7 @@ def test_get_all_staged_diffs():
     except Exception as e:
         console.print(f"[red]Unexpected error: {str(e)}[/red]")
         console.print(f"traceback: {traceback.format_exc()}")
-        console.print("[yellow]If this error persists, please report it at https://github.com/varhuman/git-wise/issues[/yellow]")
+        console.print("[yellow]If this error persists, please report it at https://github.com/creeponsky/git-wise/issues[/yellow]")
 
 # Run test
 # test_get_all_staged_diffs()

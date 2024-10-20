@@ -23,7 +23,7 @@ Unfortunately, I currently don't have any overseas payment methods 🥹🥹🥹
 
 (But your moral support is greatly appreciated! )
 
-<!-- [![Buy Me A Coffee](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/varhuman) -->
+<!-- [![Buy Me A Coffee](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/creeponsky) -->
 
 ### Stay Connected
 
@@ -119,7 +119,7 @@ if you choose detailed:
 
 ```bash
 # Clone the repository
-git clone https://github.com/varhuman/git-wise.git
+git clone https://github.com/creeponsky/git-wise.git
 cd git-wise
 
 # Create virtual environment
@@ -159,7 +159,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Support
 - Visit our [website](https://git-wise.com) (currently under construction, but we'll add content soon! 😎)
-- 📫 For bugs and feature requests, please [create an issue](https://github.com/varhuman/git-wise/issues)
+- 📫 For bugs and feature requests, please [create an issue](https://github.com/creeponsky/git-wise/issues)
 - 📧 For professional support, contact support@git-wise.dev
 
 ## Changelog

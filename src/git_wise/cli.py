@@ -392,7 +392,7 @@ def print_welcome_screen():
     
     Use 'git-wise --help' for more information.
     
-    [italic]Visit https://github.com/varhuman/git-wise for documentation[/italic]
+    [italic]Visit https://github.com/creeponsky/git-wise for documentation[/italic]
     """
     console.print(Panel(welcome_message, border_style="green"))
 
