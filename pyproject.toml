@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "git-wise"
-version = "0.1.1"
+version = "0.1.2"
 description = "AI-powered Git commit message generator"
 readme = "README.md"
 authors = [{ name = "creeponsky", email = "creeponsky@gmail.com" }]
