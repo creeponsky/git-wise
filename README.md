@@ -3,7 +3,6 @@
 An AI-powered Git commit message generator that helps developers write meaningful and standardized commit messages.
 
 [![PyPI version](https://badge.fury.io/py/git-wise.svg)](https://badge.fury.io/py/git-wise)
-[![Tests](https://github.com/varhuman/git-wise/actions/workflows/tests.yml/badge.svg)](https://github.com/varhuman/git-wise/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Welcome to Git-Wise
@@ -13,6 +12,8 @@ Welcome to Git-Wise, a project born from the realization that my commit skills w
 Git-Wise uses GPT to analyze your staged files, automatically generate commit messages, and submit them! It's designed to enhance your Git workflow and improve the quality of your commit history.
 
 As the project is still in the development stage, there may be some issues. However, if you encounter any problems or have ideas for improvement, please feel free to reach out and contribute your code!
+
+> Fun fact: Every commit in this repository was crafted with the help of Git-Wise!🫡
 
 ### Support the Project 
 
@@ -93,11 +94,24 @@ git-wise config --unlimited-chunk
 ### Configuration Options
 
 - Language: Select your preferred language for commit messages
-- Detail Level: Choose between brief, standard, or detailed commit messages
+- Detail Level: Choose between brief, minimal, or detailed commit messages
 - API Key: Set your OpenAI API key
 - Model: Select the AI model to use
 - Interactive Mode: Enable or disable interactive commit creation
 - Unlimited Chunk: Enable or disable unlimited chunk mode(for large staged changes)
+
+## Examples
+### Detail Level
+
+if you choose minimal:
+![Minimal commit example](assets/Minimal.png)
+
+if you choose brief:
+![Brief commit example](assets/Brief.png)
+
+if you choose detailed:
+![Detailed commit example](assets/Detailed.png)
+
 
 ## Development
 
