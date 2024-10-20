@@ -87,6 +87,14 @@ def configure_interactive(current_config):
     current_config['interactive'] = interactive
     return current_config
 
+def configure_unlimited_chunk(current_config):
+    unlimited_chunk = questionary.confirm(
+        "Do you want to enable unlimited chunk mode by default?",
+        default=False
+    ).ask()
+    current_config['unlimited_chunk'] = unlimited_chunk
+    return current_config
+
 @cli.command()
 def init():
     """Initialize or reconfigure Git-Wise"""
@@ -107,6 +115,7 @@ def init():
     config = configure_api_key(config)
     config = configure_model(config)
     config = configure_interactive(config)
+    config = configure_unlimited_chunk(config)
     
     save_config(config)
     
@@ -128,7 +137,8 @@ def init():
 # @click.option('--split', '-s', is_flag=True, help='Split changes into multiple commits')
 @click.option('--use-author-key', '-a', is_flag=True, help='Use author\'s API key, but not work! because I am poor :(🫡😎🥹')
 @click.option('--interactive', '-i', is_flag=True, help='Interactive mode, I will ask you to confirm the commit message and create the commit!')
-def start(language, detail, use_author_key, interactive):
+@click.option('--unlimited-chunk', '-u', is_flag=True, help='Enable unlimited chunk mode for processing large changes')
+def start(language, detail, use_author_key, interactive, unlimited_chunk):
     """Generate commit messages for staged changes"""
     try:
         console.print("[bold gray]Checking configuration...[/bold gray]")
@@ -140,11 +150,12 @@ def start(language, detail, use_author_key, interactive):
                 "or use --use-author-key option."
             )
         
-        generator = CommitMessageGenerator(AIProvider.OPENAI, model=config.get('default_model'))
+        generator = CommitMessageGenerator(AIProvider.OPENAI, model=config.get('default_model'), unlimited_chunk=config.get('unlimited_chunk', False))
         
         language = language or config.get('default_language', 'en')
         detail = detail or config.get('detail_level', 'brief')
         interactive = interactive or config.get('interactive', False)
+        unlimited_chunk = unlimited_chunk or config.get('unlimited_chunk', False)
         console.print("[bold green]Checking configuration success![/bold green]")
         
         console.print("[bold]Analyzing staged changes...[/bold]")
@@ -247,7 +258,7 @@ def doctor():
         config = load_config()
         checks.append(("Configuration file", "✅ Found"))
         
-        required_keys = ['default_language', 'openai_api_key', 'default_model', 'interactive']
+        required_keys = ['default_language', 'openai_api_key', 'default_model', 'interactive', 'unlimited_chunk']
         missing_keys = [key for key in required_keys if key not in config]
         if missing_keys:
             checks.append(("Configuration content", f"⚠️ Missing: {', '.join(missing_keys)}"))
@@ -294,6 +305,8 @@ def show_config():
             display_config[key] = model.value[0] if model else value
         elif key == 'interactive':
             display_config[key] = "Enabled" if value else "Disabled"
+        elif key == 'unlimited_chunk':
+            display_config[key] = "Enabled" if value else "Disabled"
         else:
             display_config[key] = value
 
@@ -320,7 +333,8 @@ def show_diff():
 @click.option('--api-key', '-k', is_flag=True, help='Set OpenAI API key')
 @click.option('--model', '-m', is_flag=True, help='Set default model')
 @click.option('--interactive', '-i', is_flag=True, help='Set interactive mode')
-def config(default_language, detail_level, api_key, model, interactive):
+@click.option('--unlimited-chunk', '-u', is_flag=True, help='Set unlimited chunk mode')
+def config(default_language, detail_level, api_key, model, interactive, unlimited_chunk):
     """Update specific configuration settings"""
     config = load_config()
     
@@ -339,7 +353,10 @@ def config(default_language, detail_level, api_key, model, interactive):
     if interactive:
         config = configure_interactive(config)
     
-    if not any([default_language, detail_level, api_key, model, interactive]):
+    if unlimited_chunk:
+        config = configure_unlimited_chunk(config)
+    
+    if not any([default_language, detail_level, api_key, model, interactive, unlimited_chunk]):
         console.print("[yellow]No configuration changes specified. Use options to update specific settings.[/yellow]")
         console.print("Available options:")
         console.print("  --default-language, -l  Set default language")
@@ -347,6 +364,7 @@ def config(default_language, detail_level, api_key, model, interactive):
         console.print("  --api-key, -k           Set OpenAI API key")
         console.print("  --model, -m             Set default model")
         console.print("  --interactive, -i       Set interactive mode")
+        console.print("  --unlimited-chunk, -u   Set unlimited chunk mode")
         return
     
     save_config(config)

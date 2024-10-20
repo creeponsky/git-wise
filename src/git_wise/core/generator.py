@@ -58,9 +58,12 @@ class CommitMessageGenerator:
              # If we reach here, even MAX_CHUNKS wasn't enough
             #TODO: In the future, we can use a more advanced method to handle this, such as separately processing long text modification files to summarize the main points of the changes, and then placing them here for a unified request again?🤔
             chunks = self._split_message(user_message, self.MAX_TOKENS)
-            if len(chunks) > self.MAX_CHUNKS and not self.unlimited_chunk:
-                console.print(f"[yellow]Warning: Your staged changes exceed the current token limit ({self.MAX_CHUNKS * self.MAX_TOKENS} tokens). You have {message_tokens} tokens of changes. To prevent excessive token consumption, we'll process only a subset of your changes. The commit message may not reflect all modifications. This limitation will be addressed in future updates to handle large files more effectively🥹🥹🥹.[/yellow]")
-                chunks = chunks[:self.MAX_CHUNKS]
+            if len(chunks) > self.MAX_CHUNKS:
+                if not self.unlimited_chunk:    
+                    console.print(f"[yellow]Warning: Your staged changes exceed the current token limit ({self.MAX_CHUNKS * self.MAX_TOKENS} tokens). You have {message_tokens} tokens of changes. To prevent excessive token consumption, we'll process only a subset of your changes. The commit message may not reflect all modifications. This limitation will be addressed in future updates to handle large files more effectively🥹🥹🥹.[/yellow]")
+                    chunks = chunks[:self.MAX_CHUNKS]
+                else:
+                    console.print(f"[yellow]Warning: Your staged changes exceed the current token limit ({self.MAX_CHUNKS * self.MAX_TOKENS} tokens). You have {message_tokens} tokens of changes. To prevent excessive token consumption, we'll process all your changes. This may lead to high costs. Please be aware of this and consider splitting your changes into smaller chunks.[/yellow]")
             for chunk in chunks:
                 res.append({"role": "user", "content": chunk})
         else:

@@ -3,54 +3,59 @@
 An AI-powered Git commit message generator that helps developers write meaningful and standardized commit messages.
 
 [![PyPI version](https://badge.fury.io/py/git-wise.svg)](https://badge.fury.io/py/git-wise)
-[![Tests](https://github.com/yourusername/git-wise/actions/workflows/tests.yml/badge.svg)](https://github.com/yourusername/git-wise/actions/workflows/tests.yml)
+[![Tests](https://github.com/varhuman/git-wise/actions/workflows/tests.yml/badge.svg)](https://github.com/varhuman/git-wise/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+## Welcome to Git-Wise
+
+Welcome to Git-Wise, a project born from the realization that my commit skills weren't quite up to par while developing another product! 😎 After about 10 hours of development, we now have this version.
+
+Git-Wise uses GPT to analyze your staged files, automatically generate commit messages, and submit them! It's designed to enhance your Git workflow and improve the quality of your commit history.
+
+As the project is still in the development stage, there may be some issues. However, if you encounter any problems or have ideas for improvement, please feel free to reach out and contribute your code!
+
+### Support the Project 
+
+If you find Git-Wise helpful... 🤔
+
+Unfortunately, I currently don't have any overseas payment methods 🥹🥹🥹
+
+(But your moral support is greatly appreciated! )
+
+<!-- [![Buy Me A Coffee](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/varhuman) -->
+
+### Stay Connected
+
+Follow me on Twitter for updates and more:
+
+[![Twitter Follow](https://img.shields.io/twitter/follow/creeponsky?style=social)](https://twitter.com/creeponsky)
+
+Your feedback and contributions are what make open-source projects like Git-Wise thrive. Let's make commit messages great together!
+
 
 ## Features
 
-- 🤖 AI-powered commit message generation
-- 🌍 Multi-language support (English, Chinese, etc.)
-- 📏 Customizable commit message length
-- 🔄 Automatic commit content analysis
-- 🔍 Smart commit splitting suggestions
+- 🤖 AI-powered analysis of staged files to generate commit messages (currently using GPT-4O-mini)
+- 🌍 Support for generating commits in multiple languages
+- 🚀 Automatic commit submission
+- 📏 Adjustable commit message detail level
 
 ## Installation
 
-### Using pip (Requires Python 3.8+)
 ```bash
 pip install git-wise
 ```
-
-### Using Homebrew (macOS)
-```bash
-brew install git-wise
-```
-
-### Using Scoop (Windows)
-```bash
-scoop install git-wise
-```
-
-### Binary Installation
-Download the latest binary for your platform from our [releases page](https://github.com/yourusername/git-wise/releases).
-
 ## Quick Start
 
-1. Initialize git-wise in your repository:
+1. Initialize git-wise:
 ```bash
 git-wise init
 ```
 
-2. Configure your preferences:
-```bash
-git-wise config set language en  # or zh for Chinese
-git-wise config set message-length short  # or standard, detailed
-```
-
-3. Use git-wise after staging your changes:
+2. Generate a commit message:
 ```bash
 git add .
-git-wise commit
+git-wise start
 ```
 
 ## Usage
@@ -58,31 +63,41 @@ git-wise commit
 ### Basic Commands
 
 ```bash
+# Initialize or reconfigure Git-Wise
+git-wise init
+
 # Generate commit message
-git-wise commit
+git-wise start
 
-# Generate commit message in specific language
-git-wise commit --lang zh
+# Generate commit message with specific options
+git-wise start --language en --detail brief --interactive
 
-# Generate detailed commit message
-git-wise commit --length detailed
+# Check Git-Wise configuration and environment
+git-wise doctor
 
-# Split large commits
-git-wise split
+# Show current configuration
+git-wise show-config
+
+# Show staged changes
+git-wise show-diff
+
+# Update specific configuration settings
+git-wise config --default-language
+git-wise config --detail-level
+git-wise config --api-key
+git-wise config --model
+git-wise config --interactive
+git-wise config --unlimited-chunk
 ```
 
-### Configuration
+### Configuration Options
 
-```bash
-# Set OpenAI API key
-git-wise config set api-key YOUR_API_KEY
-
-# Set default language
-git-wise config set language en
-
-# Set default message length
-git-wise config set message-length standard
-```
+- Language: Select your preferred language for commit messages
+- Detail Level: Choose between brief, standard, or detailed commit messages
+- API Key: Set your OpenAI API key
+- Model: Select the AI model to use
+- Interactive Mode: Enable or disable interactive commit creation
+- Unlimited Chunk: Enable or disable unlimited chunk mode(for large staged changes)
 
 ## Development
 
@@ -90,7 +105,7 @@ git-wise config set message-length standard
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/git-wise.git
+git clone https://github.com/varhuman/git-wise.git
 cd git-wise
 
 # Create virtual environment
@@ -98,25 +113,15 @@ python -m venv venv
 source venv/bin/activate  # or `venv\Scripts\activate` on Windows
 
 # Install development dependencies
-pip install -e ".[dev]"
+pip install -e "."
 ```
 
 ### Running Tests
-
+find a git repo you need to test, and run the following command:
 ```bash
-pytest
-```
-
-### Code Style
-
-We use Black for code formatting and isort for import sorting:
-
-```bash
-# Format code
-black .
-
-# Sort imports
-isort .
+cd /path/to/your/git/repo
+git-wise init
+git-wise start
 ```
 
 ## Contributing
@@ -139,9 +144,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - The Python community for excellent tools and libraries
 
 ## Support
-
-- 📫 For bugs and feature requests, please [create an issue](https://github.com/yourusername/git-wise/issues)
-- 💬 For questions and discussions, join our [Discord community](https://discord.gg/your-discord)
+- Visit our [website](https://git-wise.com) (currently under construction, but we'll add content soon! 😎)
+- 📫 For bugs and feature requests, please [create an issue](https://github.com/varhuman/git-wise/issues)
 - 📧 For professional support, contact support@git-wise.dev
 
 ## Changelog
