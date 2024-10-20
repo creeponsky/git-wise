@@ -1,77 +1,21 @@
 import os
-from git import Repo, InvalidGitRepositoryError
-from git.repo import Repo as GitRepo
 import git
-from github import Github
-from typing import List, Dict, Optional, Tuple, Union
+from typing import List, Dict, Optional, Union
 import requests
 from urllib.parse import urlparse
-import time
 import traceback
-def get_repo(path = os.getcwd()) -> GitRepo:
-    try:
-        return Repo(path, search_parent_directories=True)
-    except InvalidGitRepositoryError:
-        raise InvalidGitRepositoryError(f"not a git repo: {path}")
-
-def get_current_repo_name() -> Optional[str]:
-    try:
-        repo = get_repo()
-        
-        try:
-            if not repo.remotes:
-                return os.path.basename(repo.working_dir)
-                
-            remote_url = repo.remotes.origin.url
-            if remote_url.endswith('.git'):
-                remote_url = remote_url[:-4]
-            repo_name = remote_url.split('/')[-2] + '/' + remote_url.split('/')[-1]
-            return repo_name
-        except (AttributeError, IndexError):
-            print(f"Warning: Failed to get current repo name for {repo.working_dir}")
-            return os.path.basename(repo.working_dir)
-            
-    except git.exc.InvalidGitRepositoryError:
-        print(f"Warning: Failed to get current repo name for {os.getcwd()}")
-        return None
-    except Exception as e:
-        print(f"Warning: {str(e)}")
-        return None
-
-def get_staged_files(repo: GitRepo=get_repo()) -> List[str]:
-    try:
-        return [item.a_path for item in repo.index.diff('HEAD')]
-    except git.exc.GitCommandError:
-        # Handle case for initial commit when HEAD doesn't exist
-        print(f"Warning: Failed to get staged files for {repo.working_dir}")
-        return [item.a_path for item in repo.index.diff(None)]
-
-def get_file_diff(file_path: str, repo: GitRepo=get_repo()) -> str:
-    try:
-        diff: str = repo.git.diff('--cached', file_path)
-        lines: List[str] = diff.split('\n')
-        modified_lines: List[str] = [line for line in lines if line.startswith('+') or line.startswith('-')]
-        return '\n'.join(modified_lines)
-    except git.exc.GitCommandError:
-        print(f"Warning: Failed to get diff for {file_path}")
-        return ""
-
-import os
-from typing import Dict, Set, Optional
 from git import Repo, GitCommandError, InvalidGitRepositoryError
-from git.repo import Repo as GitRepo
-from pathlib import Path
 from rich.console import Console
 
 console = Console()
 
-def get_repo(path=os.getcwd()) -> GitRepo:
+def get_repo(path=os.getcwd()) -> Repo:
     try:
         return Repo(path, search_parent_directories=True)
     except InvalidGitRepositoryError:
         raise InvalidGitRepositoryError(f"Not a git repository: {path}")
 
-def get_all_staged_diffs(repo: GitRepo = get_repo(), for_prompt: bool = True) -> Dict[str, Union[Dict, List[str]]]:
+def get_all_staged_diffs(repo: Repo = get_repo(), for_prompt: bool = True) -> Dict[str, Union[Dict, List[str]]]:
     """
     Get all staged differences in the repository with two output modes.
     
@@ -119,11 +63,6 @@ def get_all_staged_diffs(repo: GitRepo = get_repo(), for_prompt: bool = True) ->
         else:
             staged = repo.index.diff(None)
         staged_files.update([(item.a_path, item.b_path) for item in staged])
-
-        # Handle new files
-        staged_new = set(repo.index.entries.keys()) - set(item.a_path for item in staged)
-        staged_files.update([(None, path) for path in staged_new])
-
         # Process each file
         for a_path, b_path in staged_files:
             current_path = b_path or a_path
@@ -133,7 +72,7 @@ def get_all_staged_diffs(repo: GitRepo = get_repo(), for_prompt: bool = True) ->
                 continue
 
             try:
-                status = get_file_status(repo, a_path, b_path)
+                status = get_file_status(a_path, b_path)
                 if status is None:
                     # Log unexpected status for debugging
                     print(f"Warning: Unexpected file status for {current_path}. a_path: {a_path}, b_path: {b_path}")
@@ -171,7 +110,7 @@ def get_all_staged_diffs(repo: GitRepo = get_repo(), for_prompt: bool = True) ->
 
     return diffs
 
-def process_file_ai_mode(repo: GitRepo, current_path: str, status: str, a_path: Optional[str]) -> List[str]:
+def process_file_ai_mode(repo: Repo, current_path: str, status: str, a_path: Optional[str]) -> List[str]:
     MAX_CONTENT_SIZE = 50000  # 50KB limit for AI processing
 
     file_info = {
@@ -204,7 +143,7 @@ def process_file_ai_mode(repo: GitRepo, current_path: str, status: str, a_path: 
 
     return [current_path, file_info["type"], file_info["content"]]
 
-def process_file_user_mode(repo: GitRepo, current_path: str, status: str, a_path: Optional[str]) -> Dict:
+def process_file_user_mode(repo: Repo, current_path: str, status: str, a_path: Optional[str]) -> Dict:
     """Process file changes in user mode (detailed output)"""
     file_info = {
         "type": status,
@@ -245,7 +184,7 @@ def extract_diff_hunks(diff_content: str) -> str:
     
     return '\n'.join(hunks)
 
-def get_file_status(repo: GitRepo, a_path: Optional[str], b_path: Optional[str]) -> Optional[str]:
+def get_file_status(a_path: Optional[str], b_path: Optional[str]) -> Optional[str]:
     """Determine the status of a file in the repository."""
     try:
         if a_path is None and b_path:
@@ -260,7 +199,7 @@ def get_file_status(repo: GitRepo, a_path: Optional[str], b_path: Optional[str])
     except Exception:
         return None
 
-def get_new_file_content(repo: GitRepo, file_path: str) -> str:
+def get_new_file_content(repo: Repo, file_path: str) -> str:
     """Get content of a new file."""
     try:
         return repo.git.show(f':0:{file_path}')
@@ -282,14 +221,14 @@ def get_new_file_content(repo: GitRepo, file_path: str) -> str:
         except Exception as e:
             return f"[Unable to read file content: {str(e)}]"
 
-def get_modified_file_diff(repo: GitRepo, file_path: str) -> str:
+def get_modified_file_diff(repo: Repo, file_path: str) -> str:
     """Get diff of a modified file."""
     try:
         return repo.git.diff('--cached', '--', file_path)
     except GitCommandError as e:
         return f"[Unable to get diff: {str(e)}]"
 
-def get_deleted_file_content(repo: GitRepo, file_path: str) -> str:
+def get_deleted_file_content(repo: Repo, file_path: str) -> str:
     """Get content of a deleted file."""
     try:
         return repo.git.show(f'HEAD:{file_path}')
@@ -403,31 +342,6 @@ def get_current_repo_info(repo_path='.') -> Optional[Dict]:
         print(f"Warning: {str(e)}")
         return None
 
-# def detect_main_language(repo_path: str) -> Optional[str]:
-#     language_extensions = {
-#         '.py': 'Python',
-#         '.js': 'JavaScript',
-#         '.java': 'Java',
-#         '.cpp': 'C++',
-#         '.go': 'Go',
-#     }
-    
-#     try:
-#         file_counts = {}
-#         for root, _, files in os.walk(repo_path):
-#             if '.git' in root:  # Skip .git directory
-#                 continue
-#             for file in files:
-#                 _, ext = os.path.splitext(file)
-#                 if ext in language_extensions:
-#                     lang = language_extensions[ext]
-#                     file_counts[lang] = file_counts.get(lang, 0) + 1
-        
-#         return max(file_counts, key=file_counts.get) if file_counts else None
-#     except Exception:
-#         print(f"Warning: Failed to detect main language for {repo_path}")
-#         return None
-
 def get_github_info(remote_url: str) -> Optional[Dict]:
     parsed_url = urlparse(remote_url)
     if 'github.com' not in parsed_url.netloc:
@@ -499,12 +413,13 @@ def get_github_info(remote_url: str) -> Optional[Dict]:
 #     }
 # print(get_all_staged_diffs())
 
-# Test function
 
+# Test function
 def test_get_all_staged_diffs():
     """Test function for staged diffs."""
     try:
         diffs = get_all_staged_diffs()
+        print(diffs)
         # print_staged_changes(diffs)
         
         # diffs_for_user = get_all_staged_diffs(for_prompt=False)

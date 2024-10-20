@@ -1,7 +1,6 @@
 import click
-from rich import print
 from rich.console import Console
-from rich.prompt import Prompt, Confirm
+from rich.text import Text
 from rich.panel import Panel
 import questionary
 from git_wise.core.analyzer import analyze_changes
@@ -13,26 +12,14 @@ from git_wise.core.generator import AIProvider
 import sys
 from git_wise.utils.exceptions import GitWiseError
 from git.exc import InvalidGitRepositoryError
-from enum import Enum
+from typing import List
 import os
 from pathlib import Path
 import traceback
+from git_wise.models.git_models import Language, DetailLevel, Model
+
 console = Console()
 VERSION = "0.1.0"
-
-class Language(Enum):
-    ENGLISH = ("English (default)", "en")
-    CHINESE = ("Chinese", "zh")
-    CUSTOM = ("Custom", None)
-
-class DetailLevel(Enum):
-    DETAILED = ("Detailed - Comprehensive commit messages with context", "detailed")
-    BRIEF = ("Brief - Concise but informative messages (Recommended)", "brief")
-    MINIMAL = ("Minimal - Just the essential changes", "minimal")
-
-class Model(Enum):
-    GPT4O_MINI = ("GPT-4o-mini (Recommended, sufficient for most cases and more cost-effective)", "gpt-4o-mini")
-    GPT4O = ("GPT-4o (Full capability, higher cost)", "gpt-4o")
 
 @click.group()
 @click.version_option(VERSION, '-v', '--version', message='Git-Wise Version: %(version)s')
@@ -131,10 +118,11 @@ def init():
 # TODO: feature: split changes into multiple commits
 # @click.option('--split', '-s', is_flag=True, help='Split changes into multiple commits')
 @click.option('--use-author-key', '-a', is_flag=True, help='Use author\'s API key, but not work! because I am poor :(🫡😎🥹')
-@click.option('--interactive', '-i', is_flag=True, help='Interactive mode')
+@click.option('--interactive', '-i', is_flag=True, help='Interactive mode, I will ask you to confirm the commit message and create the commit!')
 def start(language, detail, use_author_key, interactive):
     """Generate commit messages for staged changes"""
     try:
+        console.print("[bold]Checking configuration...[/bold]")
         config = load_config()
         api_key = get_api_key(use_author_key)
         if not api_key:
@@ -148,34 +136,33 @@ def start(language, detail, use_author_key, interactive):
         language = language or config.get('default_language', 'en')
         detail = detail or config.get('detail_level', 'brief')
         
+        console.print("[bold]Analyzing staged changes...[/bold]")
         diffs = get_all_staged_diffs()
-        repo_info = get_current_repo_info()
-        
         if not diffs:
             raise GitWiseError("No staged files found. Stage your changes using 'git add' first.")
         
-        changes = analyze_changes(diffs)
-        
+        changes: List[List[str]] = []
+        for value in diffs.values():
+            if isinstance(value, dict):
+                changes.append([v for v in value.values()])
+            elif isinstance(value, list):
+                changes.append(value)
+            else:
+                changes.append([value])
+                
+        console.print("staged changes found.")
+        console.print("[bold]Getting current repository information...[/bold]")
+        repo_info = get_current_repo_info()
+        console.print(Text(f"repository information found.repo info", style="green", justify="left"))
         # if split:
         if False:
-            commits = split_commits(changes)
-            for i, commit_changes in enumerate(commits, 1):
-                commit_message = generator.generate_commit_message(
-                    commit_changes, language, detail, repo_info
-                )
-                display_commit_message(commit_message, i if len(commits) > 1 else None)
-                
-                if interactive:
-                    if not questionary.confirm("Do you want to use this commit message?").ask():
-                        continue
-                    
-                    # Execute git commit
-                    import subprocess
-                    subprocess.run(['git', 'commit', '-m', commit_message])
-                    console.print("[green]Commit created successfully![/green]")
+            pass
         else:
-            commit_message = generator.generate_commit_message(changes, language, detail, repo_info)
-            display_commit_message(commit_message)
+            changes_str = "\n".join(["\n".join(change) for change in changes])
+            
+            console.print("[bold]Generating commit message by AI...[/bold]")
+            commit_message, token = generator.generate_commit_message(changes_str, language, detail, repo_info)
+            display_commit_message(commit_message, token)
             
             if interactive:
                 if questionary.confirm("Do you want to use this commit message?").ask():
@@ -184,37 +171,67 @@ def start(language, detail, use_author_key, interactive):
                     console.print("[green]Commit created successfully![/green]")
                 
     except GitWiseError as e:
-        console.print(f"[bold red]Error: {str(e)}[/bold red]")
+        console.print(f"[red]Error: {str(e)}[/red]")
         sys.exit(1)
     except InvalidGitRepositoryError as e:
-        console.print(f"[bold red]Error: Not a git repository. Please run this command inside a git repository.[/bold red]")
+        console.print(f"[red]Error: Not a git repository. Please run this command inside a git repository.[/red]")
         sys.exit(1)
     except Exception as e:
-        console.print(f"[bold red]An unexpected error occurred: {str(e)}[/bold red]")
-        console.print(f"traceback: {traceback.format_exc()}")
+        console.print(Text(f"An unexpected error occurred: {str(e)}", style="red", justify="left"))
+        traceback.print_exc()
         sys.exit(1)
-
-def display_commit_message(message, commit_num=None):
-    """Display generated commit message with formatting"""
-    title = "Generated Commit Message"
-    if commit_num is not None:
-        title += f" ({commit_num})"
         
+def display_commit_message(message: str, token: int):
+    """Display generated commit message with formatting"""
+    title = f"Generated Commit Message ({token} tokens, if you use gpt-4o-mini, it will cost ${token * 0.150 / 1000000} USD 😎🥹)"
     console.print(Panel.fit(
         message,
         title=title,
         border_style="blue"
     ))
     
-    # 创建一个可以直接复制粘贴的版本
-    escaped_message = message.replace('"', '\\"').replace('$', '\\$')
-    copyable_command = f'git commit -m "{escaped_message}"'
+    # 处理消息以适应命令行
+    escaped_message = (
+        message.replace('"', '\\"')  # 转义双引号
+              .replace('$', '\\$')   # 转义美元符号
+              .replace('\n', '\\n')  # 将换行符转换为字面量
+              .replace("'", "\\'")   # 转义单引号
+    )
     
-    console.print("\n[blue]You can commit using:[/blue]")
-    console.print(f"[green]{copyable_command}[/green]")
+    # 创建可复制的命令
+    copyable_command = f"git commit -m '{escaped_message}'"
     
-    console.print("\n[yellow]Copy the above command to commit, or use this for manual editing:[/yellow]")
-    console.print(f"git commit -m \"{message.split()[0]}...\"")
+    console.print("\n[blue]Copy and paste this command to commit:[/blue]")
+    
+    # 使用 Panel 来突出显示命令
+    command_panel = Panel(
+        Text(copyable_command, style="green"),
+        title="Command to Copy",
+        border_style="green"
+    )
+    console.print(command_panel)
+    
+    # 添加一个简化版本的提示
+    console.print("[dim]Or next time, you can use 'git-wise start -i' to let me commit! [/dim]")
+
+# def display_commit_message(message: str, token: int):
+#     """Display generated commit message with formatting"""
+#     title = f"Generated Commit Message ({token} tokens,if you use gpt-4o-mini, it will cost ${token * 0.150 / 1000000} USD 😎🥹)"
+#     console.print(Panel.fit(
+#         message,
+#         title=title,
+#         border_style="blue"
+#     ))
+    
+#     # 创建一个可以直接复制粘贴的版本
+#     escaped_message = message.replace('"', '\\"').replace('$', '\\$')
+#     copyable_command = f'git commit -m "{escaped_message}"'
+    
+#     console.print("\n[blue]You can commit using:[/blue]")
+#     console.print(Text(f"{copyable_command}", style="green", justify="left"))
+    
+#     console.print("\n[yellow]Copy the above command to commit, or use this for manual editing:[/yellow]")
+#     console.print(Text(f"git commit -m \"{message.split()[0]}...\"", style="green", justify="left"))
 
 @cli.command()
 def doctor():
@@ -258,6 +275,36 @@ def doctor():
     # Display check results
     for check, status in checks:
         console.print(f"{check}: {status}")
+        
+# View current configuration
+@cli.command()
+def show_config():
+    """Show current configuration"""
+    config = load_config()
+    
+    # Process and display configuration information
+    display_config = {}
+    for key, value in config.items():
+        if key == 'openai_api_key':
+            # Only show the first 6 and last 4 characters of the API key
+            display_config[key] = f"{value[:6]}...{value[-4:]}" if value else "Not set"
+        elif key == 'default_language':
+            # Display the full name of the language
+            language = next((lang for lang in Language if lang.value[1] == value), None)
+            display_config[key] = language.value[0] if language else value
+        elif key == 'detail_level':
+            # Display the description of the detail level
+            detail = next((level for level in DetailLevel if level.value[1] == value), None)
+            display_config[key] = detail.value[0] if detail else value
+        elif key == 'default_model':
+            # Display the full name of the model
+            model = next((m for m in Model if m.value[1] == value), None)
+            display_config[key] = model.value[0] if model else value
+        else:
+            display_config[key] = value
+
+    for key, value in display_config.items():
+        console.print(f"[bold green]{key}:[/bold green] {value}")
 
 @cli.command()
 def show_diff():
