@@ -1,45 +1,33 @@
-# Git-wise
+# Git-wise 🚀
 
-An AI-powered Git commit message generator that helps developers write meaningful and standardized commit messages.
+[English](README.md) | [中文](README_zh.md)
+
+Hey there! Welcome to Git-wise, your new AI-powered bestie for crafting awesome Git commit messages! 🎉
 
 [![PyPI version](https://badge.fury.io/py/git-wise.svg)](https://badge.fury.io/py/git-wise)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Welcome to Git-Wise
+## What's Git-Wise all about? 🤔
 
-Welcome to Git-Wise, a project born from the realization that my commit skills weren't quite up to par while developing another product! 😎 After about 10 hours of development, we now have this version.
+So, picture this: I'm working on another project, and suddenly I realize my commit game is... well, not exactly on point. 😅 Fast forward about 10 hours of coding frenzy, and boom! 💥 Git-Wise is born!
 
-Git-Wise uses GPT to analyze your staged files, automatically generate commit messages, and submit them! It's designed to enhance your Git workflow and improve the quality of your commit history.
+Git-Wise is like having a super smart friend who:
+- 🧠 Uses GPT to analyze your staged files
+- ✍️ Whips up commit messages that actually make sense
+- 🚀 Submits them for you (because who has time for that, right?)
 
-As the project is still in the development stage, there may be some issues. However, if you encounter any problems or have ideas for improvement, please feel free to reach out and contribute your code!
+It's all about making your Git life easier and your commit history look pro! 😎
 
-> Fun fact: Every commit in this repository was crafted with the help of Git-Wise!🫡
+> Fun fact: Every single commit in this repo? Yep, Git-Wise helped craft it! 🫡
 
-### Support the Project 
+## Features that'll make you go "Wow!" 🌟
 
-If you find Git-Wise helpful... 🤔
+- 🤖 AI-powered magic (currently rocking with GPT-4O-mini)
+- 🌍 Speaks multiple languages (because why not?)
+- 🚀 Auto-commits like a boss
+- 📏 Adjustable detail levels (for when you're feeling extra)
 
-Unfortunately, I currently don't have any overseas payment methods 🥹🥹🥹
-
-(But your moral support is greatly appreciated! )
-
-<!-- [![Buy Me A Coffee](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/creeponsky) -->
-
-### Stay Connected
-
-Follow me on Twitter for updates and more:
-
-[![Twitter Follow](https://img.shields.io/twitter/follow/creeponsky?style=social)](https://twitter.com/creeponsky)
-
-Your feedback and contributions are what make open-source projects like Git-Wise thrive. Let's make commit messages great together!
-
-
-## Features
-
-- 🤖 AI-powered analysis of staged files to generate commit messages (currently using GPT-4O-mini)
-- 🌍 Support for generating commits in multiple languages
-- 🚀 Automatic commit submission
-- 📏 Adjustable commit message detail level
+## Getting Started 🏁
 
 ## Installation
 
@@ -165,7 +153,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md) for all notable changes.
-
-## Security
-
-For security issues, please refer to our [Security Policy](SECURITY.md) and report them privately as described there.
