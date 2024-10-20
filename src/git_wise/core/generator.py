@@ -95,8 +95,7 @@ class CommitMessageGenerator:
         Detail level: {detail_level}
         Language preference: {language}
         Repository context: {repo_info}
-
-        IMPORTANT: Your response must contain ONLY the commit message(s). Do not include any explanations or comments.
+        IMPORTANT: Your response must contain ONLY the commit message(s). Do not include any explanations, comments, or subjective assessments about the changes. Focus solely on describing the actual modifications made in the code.
         """
         messages = self._create_messages(system_prompt, diff)
         return self._generate_single_message(messages)

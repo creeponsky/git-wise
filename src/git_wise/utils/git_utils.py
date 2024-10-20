@@ -1,21 +1,22 @@
 import os
+from git.repo import Repo as GitRepo
 import git
 from typing import List, Dict, Optional, Union
 import requests
 from urllib.parse import urlparse
 import traceback
-from git import Repo, GitCommandError, InvalidGitRepositoryError
+from git import GitCommandError, InvalidGitRepositoryError
 from rich.console import Console
 
 console = Console()
 
-def get_repo(path=os.getcwd()) -> Repo:
+def get_repo(path=os.getcwd()) -> GitRepo:
     try:
-        return Repo(path, search_parent_directories=True)
+        return GitRepo(path, search_parent_directories=True)
     except InvalidGitRepositoryError:
-        raise InvalidGitRepositoryError(f"Not a git repository: {path}")
+        raise InvalidGitRepositoryError(f"Not a git repository: {path}\n git-wise requires a git repository to work. you need go to a git repository first.🥹")
 
-def get_all_staged_diffs(repo: Repo = get_repo(), for_prompt: bool = True) -> Dict[str, Union[Dict, List[str]]]:
+def get_all_staged_diffs(repo: GitRepo = get_repo(), for_prompt: bool = True) -> Dict[str, Union[Dict, List[str]]]:
     """
     Get all staged differences in the repository with two output modes.
     
@@ -110,7 +111,7 @@ def get_all_staged_diffs(repo: Repo = get_repo(), for_prompt: bool = True) -> Di
 
     return diffs
 
-def process_file_ai_mode(repo: Repo, current_path: str, status: str, a_path: Optional[str]) -> List[str]:
+def process_file_ai_mode(repo: GitRepo, current_path: str, status: str, a_path: Optional[str]) -> List[str]:
     MAX_CONTENT_SIZE = 50000  # 50KB limit for AI processing
 
     file_info = {
@@ -143,7 +144,7 @@ def process_file_ai_mode(repo: Repo, current_path: str, status: str, a_path: Opt
 
     return [current_path, file_info["type"], file_info["content"]]
 
-def process_file_user_mode(repo: Repo, current_path: str, status: str, a_path: Optional[str]) -> Dict:
+def process_file_user_mode(repo: GitRepo, current_path: str, status: str, a_path: Optional[str]) -> Dict:
     """Process file changes in user mode (detailed output)"""
     file_info = {
         "type": status,
@@ -199,7 +200,7 @@ def get_file_status(a_path: Optional[str], b_path: Optional[str]) -> Optional[st
     except Exception:
         return None
 
-def get_new_file_content(repo: Repo, file_path: str) -> str:
+def get_new_file_content(repo: GitRepo, file_path: str) -> str:
     """Get content of a new file."""
     try:
         return repo.git.show(f':0:{file_path}')
@@ -221,14 +222,14 @@ def get_new_file_content(repo: Repo, file_path: str) -> str:
         except Exception as e:
             return f"[Unable to read file content: {str(e)}]"
 
-def get_modified_file_diff(repo: Repo, file_path: str) -> str:
+def get_modified_file_diff(repo: GitRepo, file_path: str) -> str:
     """Get diff of a modified file."""
     try:
         return repo.git.diff('--cached', '--', file_path)
     except GitCommandError as e:
         return f"[Unable to get diff: {str(e)}]"
 
-def get_deleted_file_content(repo: Repo, file_path: str) -> str:
+def get_deleted_file_content(repo: GitRepo, file_path: str) -> str:
     """Get content of a deleted file."""
     try:
         return repo.git.show(f'HEAD:{file_path}')

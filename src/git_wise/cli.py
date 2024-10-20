@@ -3,9 +3,7 @@ from rich.console import Console
 from rich.text import Text
 from rich.panel import Panel
 import questionary
-from git_wise.core.analyzer import analyze_changes
 from git_wise.core.generator import CommitMessageGenerator
-from git_wise.core.splitter import split_commits
 from git_wise.config import load_config, save_config, get_api_key
 from git_wise.utils.git_utils import get_all_staged_diffs, get_current_repo_info, print_staged_changes
 from git_wise.core.generator import AIProvider
@@ -13,8 +11,10 @@ import sys
 from git_wise.utils.exceptions import GitWiseError
 from git.exc import InvalidGitRepositoryError
 from typing import List
+import pyperclip
+from rich.syntax import Syntax
 import os
-from pathlib import Path
+import tempfile
 import traceback
 from git_wise.models.git_models import Language, DetailLevel, Model
 
@@ -79,6 +79,14 @@ def configure_model(current_config):
     current_config['default_model'] = selected_model.value[1]
     return current_config
 
+def configure_interactive(current_config):
+    interactive = questionary.confirm(
+        "Do you want to enable interactive mode by default?",
+        default=True
+    ).ask()
+    current_config['interactive'] = interactive
+    return current_config
+
 @cli.command()
 def init():
     """Initialize or reconfigure Git-Wise"""
@@ -98,6 +106,7 @@ def init():
     config = configure_detail_level(config)
     config = configure_api_key(config)
     config = configure_model(config)
+    config = configure_interactive(config)
     
     save_config(config)
     
@@ -122,7 +131,7 @@ def init():
 def start(language, detail, use_author_key, interactive):
     """Generate commit messages for staged changes"""
     try:
-        console.print("[bold]Checking configuration...[/bold]")
+        console.print("[bold gray]Checking configuration...[/bold gray]")
         config = load_config()
         api_key = get_api_key(use_author_key)
         if not api_key:
@@ -135,6 +144,8 @@ def start(language, detail, use_author_key, interactive):
         
         language = language or config.get('default_language', 'en')
         detail = detail or config.get('detail_level', 'brief')
+        interactive = interactive or config.get('interactive', False)
+        console.print("[bold green]Checking configuration success![/bold green]")
         
         console.print("[bold]Analyzing staged changes...[/bold]")
         diffs = get_all_staged_diffs()
@@ -150,7 +161,7 @@ def start(language, detail, use_author_key, interactive):
             else:
                 changes.append([value])
                 
-        console.print("staged changes found.")
+        console.print("[bold green]Staged changes found![/bold green]")
         console.print("[bold]Getting current repository information...[/bold]")
         repo_info = get_current_repo_info()
         console.print(Text(f"repository information found.repo info", style="green", justify="left"))
@@ -181,57 +192,72 @@ def start(language, detail, use_author_key, interactive):
         traceback.print_exc()
         sys.exit(1)
         
+def create_commit(commit_message):
+    """Create a commit using a temporary file to preserve multi-line format"""
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, encoding='utf-8') as temp_file:
+            temp_file.write(commit_message)
+            temp_file_path = temp_file.name
+
+        import subprocess
+        result = subprocess.run(['git', 'commit', '-F', temp_file_path], capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            console.print("[green]Commit created successfully![/green]")
+        else:
+            console.print(f"[red]Failed to create commit. Error: {result.stderr}[/red]")
+    
+    finally:
+        # Clean up the temporary file
+        if 'temp_file_path' in locals():
+            os.unlink(temp_file_path)
+
+
 def display_commit_message(message: str, token: int):
     """Display generated commit message with formatting"""
+    # 移除可能存在的 markdown 代码块标记
+    message = message.strip('`').strip()
+    
+    # 显示生成的消息
     title = f"Generated Commit Message ({token} tokens, if you use gpt-4o-mini, it will cost ${token * 0.150 / 1000000} USD 😎🥹)"
     console.print(Panel.fit(
-        message,
+        Syntax(message, "markdown", theme="monokai", word_wrap=True),
         title=title,
         border_style="blue"
     ))
     
     # 处理消息以适应命令行
     escaped_message = (
-        message.replace('"', '\\"')  # 转义双引号
-              .replace('$', '\\$')   # 转义美元符号
-              .replace('\n', '\\n')  # 将换行符转换为字面量
-              .replace("'", "\\'")   # 转义单引号
+        message.replace('"', '\\"')
+              .replace('$', '\\$')
+              .replace('\n', ' ')  # 将换行符转换为空格
+              .replace("'", "\\'")
     )
     
     # 创建可复制的命令
-    copyable_command = f"git commit -m '{escaped_message}'"
+    copyable_command = f'git commit -m "{escaped_message}"'
     
-    console.print("\n[blue]Copy and paste this command to commit:[/blue]")
+    # 显示可执行的命令
+    console.print("\n[blue]Execute this command to commit:[/blue]")
     
-    # 使用 Panel 来突出显示命令
-    command_panel = Panel(
-        Text(copyable_command, style="green"),
-        title="Command to Copy",
-        border_style="green"
-    )
-    console.print(command_panel)
+    # 使用 Syntax 来显示命令，这样更容易复制
+    console.print(Syntax(
+        copyable_command,
+        "bash",
+        theme="monokai",
+        word_wrap=True,
+        padding=1
+    ))
     
-    # 添加一个简化版本的提示
-    console.print("[dim]Or next time, you can use 'git-wise start -i' to let me commit! [/dim]")
-
-# def display_commit_message(message: str, token: int):
-#     """Display generated commit message with formatting"""
-#     title = f"Generated Commit Message ({token} tokens,if you use gpt-4o-mini, it will cost ${token * 0.150 / 1000000} USD 😎🥹)"
-#     console.print(Panel.fit(
-#         message,
-#         title=title,
-#         border_style="blue"
-#     ))
+    # 复制到剪贴板
+    try:
+        pyperclip.copy(copyable_command)
+        console.print("[green](Command copied to clipboard!)[/green]")
+    except Exception:
+        console.print("[yellow](Auto-copy not available)[/yellow]")
     
-#     # 创建一个可以直接复制粘贴的版本
-#     escaped_message = message.replace('"', '\\"').replace('$', '\\$')
-#     copyable_command = f'git commit -m "{escaped_message}"'
-    
-#     console.print("\n[blue]You can commit using:[/blue]")
-#     console.print(Text(f"{copyable_command}", style="green", justify="left"))
-    
-#     console.print("\n[yellow]Copy the above command to commit, or use this for manual editing:[/yellow]")
-#     console.print(Text(f"git commit -m \"{message.split()[0]}...\"", style="green", justify="left"))
+    # 添加交互模式提示
+    console.print("\n[dim]💡 Tip: Next time use 'git-wise start -i' for interactive commit![/dim]")
 
 @cli.command()
 def doctor():
@@ -246,7 +272,7 @@ def doctor():
         checks.append(("Configuration file", "✅ Found"))
         
         # Check necessary configuration items
-        required_keys = ['default_language', 'openai_api_key', 'default_model']
+        required_keys = ['default_language', 'openai_api_key', 'default_model', 'interactive']
         missing_keys = [key for key in required_keys if key not in config]
         if missing_keys:
             checks.append(("Configuration content", f"⚠️ Missing: {', '.join(missing_keys)}"))
@@ -300,6 +326,8 @@ def show_config():
             # Display the full name of the model
             model = next((m for m in Model if m.value[1] == value), None)
             display_config[key] = model.value[0] if model else value
+        elif key == 'interactive':
+            display_config[key] = "Enabled" if value else "Disabled"
         else:
             display_config[key] = value
 
@@ -325,7 +353,8 @@ def show_diff():
 @click.option('--detail-level', '-d', is_flag=True, help='Set detail level')
 @click.option('--api-key', '-k', is_flag=True, help='Set OpenAI API key')
 @click.option('--model', '-m', is_flag=True, help='Set default model')
-def config(default_language, detail_level, api_key, model):
+@click.option('--interactive', '-i', is_flag=True, help='Set interactive mode')
+def config(default_language, detail_level, api_key, model, interactive):
     """Update specific configuration settings"""
     config = load_config()
     
@@ -341,13 +370,17 @@ def config(default_language, detail_level, api_key, model):
     if model:
         config = configure_model(config)
     
-    if not any([default_language, detail_level, api_key, model]):
+    if interactive:
+        config = configure_interactive(config)
+    
+    if not any([default_language, detail_level, api_key, model, interactive]):
         console.print("[yellow]No configuration changes specified. Use options to update specific settings.[/yellow]")
         console.print("Available options:")
         console.print("  --default-language, -l  Set default language")
         console.print("  --detail-level, -d      Set detail level")
         console.print("  --api-key, -k           Set OpenAI API key")
         console.print("  --model, -m             Set default model")
+        console.print("  --interactive, -i       Set interactive mode")
         return
     
     save_config(config)
